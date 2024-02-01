@@ -204,9 +204,14 @@ async function addEmployee() {
       }
     ]);
 
-    const roleId = selectRole().indexOf(answers.role) + 1;
-    console.log(roleId)
-    const managerId = selectManager().indexOf(answers.choice) + 1;
+    // const roleId = selectRole().indexOf(answers.role) + 1;
+    // console.log(roleId)
+    // const managerId = selectManager().indexOf(answers.choice) + 1;
+    const roleId = answers.role.find((role) => role.title === answers.role).id;
+    const managerId = await connection.query(
+      "SELECT id FROM employee WHERE first_name = ?",
+      answers.choice
+    );
 
      connection.query("INSERT INTO employee SET ?", {
       first_name: answers.firstname,
