@@ -8,12 +8,11 @@ const connection = mysql.createConnection({
   user: "root",
   // password: "password",
   database: "employee_tracker"
-});
+}).promise();
 
 
 //connection id
-connection.connect(function (err) {
-  if (err) throw err
+connection.connect().then(() => {
   console.log("Connected as Id" + connection.threadId)
   startPrompt();
 });
@@ -70,8 +69,8 @@ async function startPrompt() {
 }
 
 //view all employees
-function viewAllEmployees() {
-  connection.query(
+async function viewAllEmployees() {
+  const [rows, fields] = await connection.query(
     `SELECT 
             employee.first_name, 
             employee.last_name, 
@@ -81,43 +80,28 @@ function viewAllEmployees() {
         CONCAT(e.first_name, ' ' ,e.last_name) AS Manager FROM employee 
         INNER JOIN role on role.id = employee.role_id 
         INNER JOIN department on department.id = role.department_id 
-        left join employee e on employee.manager_id = e.id;`,
-    function (err, res) {
-      if (err) throw err
-
-      console.table(res)
-
-      startPrompt()
-    })
+        left join employee e on employee.manager_id = e.id;`);
+  console.table(rows);
+  startPrompt()
 }
 
 //view all roles
-function viewAllRoles() {
-  connection.query(
-    `SELECT * FROM role`, function (err, res) {
-      if (err) throw err
-
-      console.table(res)
-
-      startPrompt()
-    })
+async function viewAllRoles() {
+  const [rows, columns] = await connection.query(`SELECT * FROM role`);
+  console.table(rows);
+  startPrompt();
 }
 
 //view all roles by department
-function viewAllDepartments() {
-  connection.query(
+async function viewAllDepartments() {
+  const [rows, column] = await connection.query(
     `SELECT 
             employee.first_name, 
             employee.last_name, 
             department.name AS Department 
-            FROM employee JOIN role ON employee.role_id = role.id JOIN department ON role.department_id = department.id ORDER BY employee.id;`,
-    function (err, res) {
-      if (err) throw err
-
-      console.table(res)
-
-      startPrompt()
-    })
+            FROM employee JOIN role ON employee.role_id = role.id JOIN department ON role.department_id = department.id ORDER BY employee.id;`)
+  console.table(rows);
+  startPrompt();
 }
 
 //select role queries and role title for add employee
@@ -135,15 +119,15 @@ function viewAllDepartments() {
 // }
 
 async function selectRole() {
-  const res = await connection.query("SELECT * FROM role");
-  return res.map(role => ({ id: role.id, title: role.title }));
+  const [res] = await connection.query("SELECT * FROM role");
+  return res.map(role => ({ value: role.id, name: role.title }));
 }
 
 
 async function renderRole() {
   try {
     const roleArr = await selectRole();
-    console.log(roleArr);
+
   } catch (err) {
     console.error(err);
   }
@@ -152,29 +136,18 @@ async function renderRole() {
 renderRole();
 
 //select role queries and manager for add employee
-async function selectManager() {
-  return new Promise((resolve, reject) => {
-    connection.query(`SELECT first_name FROM employee WHERE manager_id IS NULL`, function (err, res) {
-      if (err) {
-        reject(err);
-      } else {
-        const managersArr = res.map(manager => manager.first_name);
-        resolve(managersArr);
-      }
-    });
-  });
+async function selectManagers() {
+  const [res] = await connection.query(`SELECT * FROM employee WHERE manager_id IS NULL`);
+  const managersArr = res.map(manager => ({
+    name: manager.first_name,
+    value: manager.id
+  }));
+  return managersArr;
 }
 
-async function renderManager() {
-  try {
-    const managersArr = await selectManager();
-    console.log(managersArr); // Use the managersArr array as needed
-  } catch (err) {
-    console.error(err);
-  }
-}
 
-renderManager();
+
+
 
 //add employee
 async function addEmployee() {
@@ -197,23 +170,20 @@ async function addEmployee() {
         choices: await selectRole()
       },
       {
-        name: "choice",
-        type: "rawlist",
+        name: "manager_id",
+        type: "list",
         message: "What's their manager's name?",
-        choices: await selectManager()
+        choices: await selectManagers()
       }
     ]);
 
     // const roleId = selectRole().indexOf(answers.role) + 1;
     // console.log(roleId)
     // const managerId = selectManager().indexOf(answers.choice) + 1;
-    const roleId = answers.role.find((role) => role.title === answers.role).id;
-    const managerId = await connection.query(
-      "SELECT id FROM employee WHERE first_name = ?",
-      answers.choice
-    );
+    const roleId = answers.role;
+    const managerId = answers.manager_id;
 
-     connection.query("INSERT INTO employee SET ?", {
+    await connection.query("INSERT INTO employee SET ?", {
       first_name: answers.firstname,
       last_name: answers.lastname,
       manager_id: managerId,
@@ -230,7 +200,7 @@ async function addEmployee() {
 //update employee
 async function updateEmployee() {
   try {
-    const res = await new Promise((resolve, reject) => {
+    const [rows, columns] = await
       connection.query(`SELECT 
         employee.last_name, 
         role.title,
@@ -240,29 +210,22 @@ async function updateEmployee() {
     JOIN 
         role 
     ON 
-        employee.role_id = role.id;`,function (err, res) {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(res);
-        }
-      });
-    });
+        employee.role_id = role.id;`);
 
-    console.log(res);
+
 
     const answers = await inquirer.prompt([
       {
         name: "lastName",
         type: "list",
-        choices: () => res.map(employee => employee.last_name),
+        choices: () => rows.map(employee => employee.last_name),
         message: "What is the Employee's last name?"
       },
       {
         name: "role",
         type: "list",
         message: "What is the Employee's new title?",
-        choices: () => res.map(role => role.title)
+        choices: () => rows.map(role => role.title)
       }
     ]);
     // const roleTitle = await selectRole();
@@ -270,15 +233,15 @@ async function updateEmployee() {
     // console.log(roleTitle);
 
     //const roleId = roleTitle.indexOf(toString(answers.role)) + 1;
-    const roleId = res.find(role => role.title === answers.role);
-    console.log(roleId.id);
+    const roleId = rows.find(role => role.title === answers.role);
 
-    connection.query("UPDATE employee SET ? WHERE ?", [
+
+    await connection.query("UPDATE employee SET ? WHERE ?", [
       { role_id: roleId.id },
       { last_name: answers.lastName }
     ]);
 
-    console.table(answers);
+    // console.table(answers);
     startPrompt();
   } catch (err) {
     console.error(err);
@@ -288,22 +251,12 @@ async function updateEmployee() {
 //add employee role
 async function addRole() {
   try {
-    const res = await new Promise((resolve, reject) => {
-      connection.query(
-        `SELECT 
-                role.title AS Title, 
-                role.salary AS Salary 
-            FROM 
-                role`,
-
-        function (err, res) {
-          if (err) {
-            reject(err);
-          } else {
-            resolve(res);
-          }
-        });
-    });
+    const [res] = await connection.query(
+      `SELECT 
+              role.title AS Title, 
+              role.salary AS Salary 
+          FROM 
+              role`);
 
     const answers = await inquirer.prompt([
       {
@@ -318,7 +271,7 @@ async function addRole() {
       }
     ]);
 
-    connection.query("INSERT INTO role SET ?", {
+    await connection.query("INSERT INTO role SET ?", {
       title: answers.Title,
       salary: answers.Salary
     });
