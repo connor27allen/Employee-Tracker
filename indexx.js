@@ -104,19 +104,7 @@ async function viewAllDepartments() {
   startPrompt();
 }
 
-//select role queries and role title for add employee
-// async function selectRole() {
-//   return new Promise((resolve, reject) => {
-//     connection.query(`SELECT * FROM role`, function(err, res) {
-//       if (err) {
-//         reject(err);
-//       } else {
-//         const roleArr = res.map(role => role.title);
-//         resolve(roleArr);
-//       }
-//     });
-//   });
-// }
+
 
 async function selectRole() {
   const [res] = await connection.query("SELECT * FROM role");
@@ -144,9 +132,6 @@ async function selectManagers() {
   }));
   return managersArr;
 }
-
-
-
 
 
 //add employee
@@ -177,9 +162,7 @@ async function addEmployee() {
       }
     ]);
 
-    // const roleId = selectRole().indexOf(answers.role) + 1;
-    // console.log(roleId)
-    // const managerId = selectManager().indexOf(answers.choice) + 1;
+  
     const roleId = answers.role;
     const managerId = answers.manager_id;
 
@@ -201,7 +184,8 @@ async function addEmployee() {
 async function updateEmployee() {
   try {
     const [rows, columns] = await
-      connection.query(`SELECT 
+      connection.query(
+      `SELECT 
         employee.last_name, 
         role.title,
         role.id
@@ -228,11 +212,7 @@ async function updateEmployee() {
         choices: () => rows.map(role => role.title)
       }
     ]);
-    // const roleTitle = await selectRole();
-
-    // console.log(roleTitle);
-
-    //const roleId = roleTitle.indexOf(toString(answers.role)) + 1;
+    
     const roleId = rows.find(role => role.title === answers.role);
 
 
@@ -241,7 +221,7 @@ async function updateEmployee() {
       { last_name: answers.lastName }
     ]);
 
-    // console.table(answers);
+   
     startPrompt();
   } catch (err) {
     console.error(err);
@@ -255,7 +235,7 @@ async function addRole() {
       `SELECT 
               role.title AS Title, 
               role.salary AS Salary 
-          FROM 
+        FROM 
               role`);
 
     const answers = await inquirer.prompt([
